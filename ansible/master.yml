@@ -1,0 +1,12 @@
+---
+- hosts: tag_Role_Haproxy
+  remote_user: ubuntu
+  become: yes
+  become_method: sudo
+  roles:
+    - role: base
+      tags:
+        - base
+    - role: haproxy
+      tags:
+        - haproxy

@@ -1,0 +1,17 @@
+#!/usr/bin/env ruby
+
+require 'webrick'
+
+server = WEBrick::HTTPServer.new :Port => 91
+
+# The following proc is used to customize the server operations
+server.mount_proc '/reload' do |request, response|
+  system('/usr/local/bin/sync-servers')
+  response.body = "reloaded\n"
+end
+
+# The following command will provide a hook to shutdown the server (often done with Ctrl+C)
+trap('INT') {server.shutdown}
+
+# Start the server
+server.start

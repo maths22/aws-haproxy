@@ -1,0 +1,64 @@
+---
+- name: haproxy 2.1 availible
+  apt_repository:
+    repo: ppa:vbernat/haproxy-2.1
+- name: Haproxy is installed
+  apt:
+    pkg: ["haproxy"]
+  register: install_haproxy
+- name: download dataplaneapi
+  get_url:
+    url: https://github.com/haproxytech/dataplaneapi/releases/download/v1.2.4/dataplaneapi
+    dest: /usr/local/bin/dataplaneapi
+    checksum: "sha256:https://github.com/haproxytech/dataplaneapi/releases/download/v1.2.4/dataplaneapi_checksum.txt"
+    mode: "755"
+- name: Gems installed
+  gem:
+    name: "{{item}}"
+    user_install: no
+    state: latest
+  loop:
+    - aws-sdk-autoscaling
+    - aws-sdk-ec2
+    - faraday
+- name: copy the sync script
+  template:
+    src: usr/local/bin/sync-servers
+    dest: /usr/local/bin/sync-servers
+    mode: '755'
+- name: run sync on boot
+  copy:
+    src: etc/systemd/system/sync-servers.service
+    dest: /etc/systemd/system/sync-servers.service
+- name: enable service sync-servers and ensure it is not masked
+  systemd:
+    name: sync-servers
+    enabled: yes
+    masked: no
+- name: copy sync reload server
+  copy:
+    src: etc/systemd/system/reload-server.service
+    dest: /etc/systemd/system/reload-server.service
+- name: enable service reload-server and ensure it is not masked
+  systemd:
+    name: reload-server
+    enabled: yes
+    state: started
+    masked: no
+- name: copy the sync server
+  copy:
+    src: usr/local/bin/reload-server
+    dest: /usr/local/bin/reload-server
+    mode: '755'
+# we only want to do this on initial run, since it then becomes dynamically managed
+- name: copy the haproxy config file
+  register: configure_haproxy
+  template:
+    src: etc/haproxy/haproxy.cfg
+    dest: /etc/haproxy/haproxy.cfg
+  when: install_haproxy.changed
+- name: restart haproxy
+  service:
+    name: haproxy
+    state: restarted
+  when: configure_haproxy.changed

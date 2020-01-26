@@ -1,0 +1,5 @@
+---
+- name: Latest version of Ruby is installed
+  apt:
+    pkg: ["ruby"]
+    state: latest

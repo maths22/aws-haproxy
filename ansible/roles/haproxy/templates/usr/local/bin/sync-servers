@@ -1,0 +1,87 @@
+#!/usr/bin/env ruby
+
+require 'aws-sdk-autoscaling'
+require 'aws-sdk-ec2'
+require 'faraday'
+
+require 'json'
+
+haproxy_username = 'dataplaneapi'
+haproxy_password = '{{haproxy_dynamic_password}}'
+haproxy_backend = '{{backend_name}}'
+
+region = JSON.parse(Faraday.get('http://169.254.169.254/latest/dynamic/instance-identity/document').body)['region']
+user_data = JSON.parse(Faraday.get('http://169.254.169.254/latest/user-data').body)
+
+autoscaling_client = Aws::AutoScaling::Client.new(region: region)
+ec2_client = Aws::EC2::Client.new(region: region)
+
+instance_ids = autoscaling_client.describe_auto_scaling_groups(auto_scaling_group_names: [user_data['asg_name']]).auto_scaling_groups.first.instances.map(&:instance_id)
+running_instances = if instance_ids.length.zero?
+  []
+else
+  ec2_client.describe_instances(instance_ids: instance_ids).reservations.flat_map(&:instances).map do |instance|
+    { 'name' => instance.instance_id, 'address' => instance.private_ip_address, 'port' => user_data['port'] || 80, 'check' => 'enabled' }
+  end
+end
+
+class HaproxyMiddleware < Faraday::Middleware
+  attr_reader :config_version
+
+  def call(request_env)
+    unless [:get, :options].include?(request_env[:method])
+      request_env[:url].query = add_query_param(request_env[:url].query, "version", @config_version)
+    end
+    @app.call(request_env).on_complete do |response_env|
+      @config_version = response_env[:response_headers]['configuration-version']
+    end
+  end
+
+  def add_query_param(query, key, value)
+    query = query.to_s
+    query << "&" unless query.empty?
+    query << "#{Faraday::Utils.escape key}=#{Faraday::Utils.escape value}"
+  end
+end
+
+haproxy_conn = Faraday.new('http://localhost:5555') do |builder|
+  builder.use HaproxyMiddleware
+end
+haproxy_conn.basic_auth(haproxy_username, haproxy_password)
+
+proxy_instances = JSON.parse(haproxy_conn.get("/v1/services/haproxy/configuration/servers?backend=#{haproxy_backend}").body)['data']
+
+instances_to_add = running_instances - proxy_instances
+instances_to_remove = proxy_instances - running_instances
+
+# Load the current version for the version header
+haproxy_conn.get("/v1/services/haproxy/configuration/backends/#{haproxy_backend}")
+haproxy_conn.put("/v1/services/haproxy/configuration/backends/#{haproxy_backend}", {
+  balance: {
+    algorithm: "roundrobin"
+  },
+  forwardfor: {
+    enabled: "enabled"
+  },
+  httpchk: {
+    method: 'GET',
+    uri: user_data['health_check_path'] || '/health_check'
+  },
+  name: haproxy_backend
+}.to_json, "Content-Type" => "application/json")
+
+instances_to_add.map do |instance|
+  # Load the current version for the version header
+  haproxy_conn.get("/v1/services/haproxy/configuration/servers?backend=#{haproxy_backend}")
+  haproxy_conn.post(
+    "/v1/services/haproxy/configuration/servers?backend=#{haproxy_backend}",
+    instance.to_json,
+    "Content-Type" => "application/json"
+  )
+end
+
+instances_to_remove.map do |instance|
+  # Load the current version for the version header
+  haproxy_conn.get("/v1/services/haproxy/configuration/servers?backend=#{haproxy_backend}")
+  haproxy_conn.delete("/v1/services/haproxy/configuration/servers/#{instance['name']}?backend=#{haproxy_backend}")
+end

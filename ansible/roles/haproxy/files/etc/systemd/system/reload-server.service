@@ -1,0 +1,11 @@
+[Unit]
+Description=Run background server
+After=haproxy.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/reload-server
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target

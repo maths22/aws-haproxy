@@ -1,0 +1,4 @@
+haproxy_ansible_password: Password123
+haproxy_dynamic_password: Password234
+
+backend_name: web_backend

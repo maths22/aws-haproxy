@@ -1,0 +1,11 @@
+[Unit]
+Description=Sync servers
+After=haproxy.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/sync-servers
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target
