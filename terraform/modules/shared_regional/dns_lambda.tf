@@ -84,7 +84,7 @@ resource "aws_lambda_function" "dns" {
 
   source_code_hash = data.archive_file.dns_lambda_archive.output_base64sha256
 
-  runtime = "ruby2.5"
+  runtime = "ruby2.7"
 
   environment {
     variables = {

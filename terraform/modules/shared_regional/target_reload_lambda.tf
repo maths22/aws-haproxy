@@ -79,7 +79,7 @@ resource "aws_lambda_function" "target_reload" {
 
   source_code_hash = data.archive_file.target_reload_lambda_archive.output_base64sha256
 
-  runtime = "ruby2.5"
+  runtime = "ruby2.7"
 
   tags = local.tags
 }
