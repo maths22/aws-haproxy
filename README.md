@@ -20,7 +20,7 @@ provider "aws" {
 }
 
 module "global" {
-  source = "github.com/maths22/aws-haproxy//modules/shared_global"
+  source = "github.com/maths22/aws-haproxy//terraform/modules/shared_global"
 
   dns_suffix = "mytld.com"
 
@@ -30,7 +30,7 @@ module "global" {
 }
 
 module "shared-us-west-2" {
-  source = "github.com/maths22/aws-haproxy//modules/shared_regional"
+  source = "github.com/maths22/aws-haproxy//terraform/modules/shared_regional"
 
   hosted_zone_id = module.global.route53_zone_id
 
@@ -55,7 +55,7 @@ Create load balancers with terraform that looks like the following:
 
 ```
 module "test-lb" {
-  source = "github.com/maths22/aws-haproxy//modules/haproxy_lb"
+  source = "github.com/maths22/aws-haproxy//terraform/modules/haproxy_lb"
 
   asg_name = "my-asg"
   upstream_port = 80
